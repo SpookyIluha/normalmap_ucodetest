@@ -119,7 +119,7 @@ int main(void)
     rsp_blend_init();  // init our custom overlay
 
     tiles_sprite = sprite_load("rom:/env_spec1.sprite");
-    normal_sprite = sprite_load("rom:/normal2.sprite");
+    normal_sprite = sprite_load("rom:/normal.sprite");
     fnt1 = rdpq_font_load("rom:/Ac437_Tandy2K_G.font64");
 
     surface_t normal_surf = sprite_get_pixels(normal_sprite);
@@ -173,51 +173,4 @@ int main(void)
 
         cur_frame++;
     }
-
-    /* Attach SP handler and enable interrupt */
-    //register_SP_handler(&sp_handler);
-    //set_SP_interrupt(1);
-
-    //rsp_load(&rsp_basic);
-
-    //unsigned char* orig = malloc(16);
-    //rsp_read_data(orig, 16, 0);
-
-    /*unsigned long i = 0;
-    while(i < 16)
-    {
-        printf("%02X ", orig[i]);
-        if (i % 8 == 7) {
-            printf("\n");
-        }
-        i++;
-    }
-
-    printf("\n");
-    console_render();
-
-    rsp_run_async();
-
-    RSP_WAIT_LOOP(2000) {
-        if (broke) {
-            break;
-        }
-    }
-
-    printf("\nbroke");
-    printf("\n");
-
-    unsigned char* up = malloc(16);
-    rsp_read_data((void*)up, 16, 0);
-
-    i = 0;
-    while(i < 16)
-    {
-        printf("%02X ", up[i]);
-        if (i % 8 == 7) {
-            printf("\n");
-        }
-        i++;
-    }
-    console_render();*/
 }
