@@ -158,8 +158,8 @@ BlendCmd_NormalMapReflect:
     move strength, t1           #   strength = 8 - strength;
     andi strength, 65535
     li  t0, 65535
-    #add shiftx, shiftx, t0      #   shiftx += (1<<16); 
-    #add shifty, shifty, t0      #   shifty += (1<<16);
+    add shiftx, shiftx, t0      #   shiftx += (1<<16); 
+    add shifty, shifty, t0      #   shifty += (1<<16);
 
 
     # Fetch envmap buffer into DMEM. Notice that we use to async version
@@ -209,16 +209,16 @@ pixel_loop:
     srav n_shiftX, n_shiftX, strength    #      int n_shiftX = (normalmap->r - 128) >> strength;
     srav n_shiftY, n_shiftY, strength    #      int n_shiftY = (normalmap->g - 128) >> strength;
 
-    move X_val, i_val
-    add X_val, shiftx
-    add X_val, n_shiftX
-    and X_val, pixelsize    #      int x = (j + shiftx + n_shiftX) % pixelsize;
+    move X_val, j_val
+    add  X_val, shiftx
+    add  X_val, n_shiftX
+    and  X_val, pixelsize    #      int x = (j + shiftx + n_shiftX) % pixelsize;
 
-    move Y_val, j_val
-    add Y_val, shifty
-    sub Y_val, n_shiftY
-    and Y_val, pixelsize
-    sllv  Y_val, Y_val, size    #      int y = ((i + shifty - n_shiftY) % pixelsize) << size;
+    move Y_val, i_val
+    add  Y_val, shifty
+    sub  Y_val, n_shiftY
+    and  Y_val, pixelsize
+    sllv Y_val, Y_val, size    #      int y = ((i + shifty - n_shiftY) % pixelsize) << size;
 
     add n_shiftX, X_val, Y_val # x+y
     sll n_shiftX, 1 # (x+y)*2
@@ -227,11 +227,11 @@ pixel_loop:
 
     addi nrm_buf, 4
     addi dest_buf, 2 # normalmap++, destmap++
-    addi j_val, 1 # j++
-    beq  j_val, pixelsize, end_pixel_loop # if(j == pixelsize) i++
+    addi i_val, 1 # j++
+    beq  i_val, pixelsize, end_pixel_loop # if(j == pixelsize) i++
     nop
-    li   j_val, 0
-    addi i_val, 1 # i++
+    li   i_val, 0
+    addi j_val, 1 # i++
 
 end_pixel_loop:
     # 1 pixel done, check if we're done
