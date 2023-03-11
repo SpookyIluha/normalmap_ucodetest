@@ -137,7 +137,6 @@ BlendCmd_NormalMapReflect:
     andi size, 65535
     sllv pixelsize, t0, size     #   int pixelsize = 1<<size; (eg. 32 pixel width and height image)
     sllv totalsize, pixelsize, size     #   int totalsize = pixelsize<<size; (eg. 32*32 total pixels in image)
-    assert 0x1234
     li  t0, 8
     sub t1, t0, strength
     move strength, t1           #   strength = 8 - strength;
@@ -195,8 +194,8 @@ pixel_loop:
     lb t5, (t1)   #      int n_shiftx = normalmap->g;
     addi t4, -128   
     addi t5, -128
-    srl t4, strength    #      int n_shiftx = (normalmap->r - 128) >> strength;
-    srl t5, strength    #      int n_shifty = (normalmap->g - 128) >> strength;
+    srlv t4, t4, strength    #      int n_shiftx = (normalmap->r - 128) >> strength;
+    srlv t5, t5, strength    #      int n_shifty = (normalmap->g - 128) >> strength;
 
     move t6, t2
     add t6, shiftx
@@ -218,7 +217,7 @@ pixel_loop:
     addi t1, 2
     addi s2, 2 # normalmap++, destmap++
     addi t3, 1 # j++
-    beq  t3, pixelsize, end_pixel_loop
+    beq  t3, pixelsize, end_pixel_loop # if(j == pixelsize) i++
     nop
     li   t3, 0
     addi t2, 1 # i++
@@ -228,6 +227,7 @@ end_pixel_loop:
     addi t0, -1
     bgtz t0, pixel_loop
     nop
+    
     # Now DMA back into RDRAM
     lw s0, %lo(DST_SRC_RDRAM)
     li s4, %lo(DST_BUF)
@@ -244,13 +244,13 @@ end_pixel_loop:
     lw t4, %lo(NRM_SRC_RDRAM)
     addi t4, 512
     sw t4, %lo(NRM_SRC_RDRAM)
-
     addi totalsize, -128 # subtract buffer length in pixels for the buffer loop
     bgtz totalsize, buffer_loop
     nop
     # Done! Go back to main loop
     # NOTE: we can't do "jr ra" here as "ra" was discarded by the previous DMA function calls.
     # Jumping to RSPQ_Loop is the standard way to finish an overlay command, in these cases.
+
     j RSPQ_Loop 
     nop
 
