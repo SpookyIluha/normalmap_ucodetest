@@ -188,8 +188,8 @@ buffer_loop:
 
 
     li pixelcount, BUFFER_PIXELS # store buffer length in pixels for the pixel loop
-    lw nrm_buf, %lo(NRM_BUF)
-    lw dest_buf, %lo(DST_BUF)
+    la nrm_buf, %lo(NRM_BUF)
+    la dest_buf, %lo(DST_BUF)
 
 pixel_loop:
 
@@ -202,7 +202,6 @@ pixel_loop:
     # a2 - shifty
     # a3 - strength
 
-    addi nrm_buf, 1
     li n_shiftX, 0
     lb n_shiftX, (nrm_buf)   #      int n_shiftX = normalmap->r;
     addi nrm_buf, 1
@@ -224,13 +223,13 @@ pixel_loop:
     and Y_val, pixelsize
     sllv  Y_val, Y_val, size    #      int y = ((i + shifty - n_shiftY) % pixelsize) << size;
 
-    lw  n_shiftY, %lo(ENV_BUF)
+    la  n_shiftY, %lo(ENV_BUF)
     add n_shiftY, n_shiftY, X_val
     add n_shiftY, n_shiftY, Y_val # envmap[x + y];
     lh  n_shiftX, (n_shiftY)
     sh  n_shiftX, (dest_buf)  # *destmap = envmap[x + y];
 
-    addi nrm_buf, 2
+    addi nrm_buf, 3
     addi dest_buf, 2 # normalmap++, destmap++
     addi j_val, 1 # j++
     beq  j_val, pixelsize, end_pixel_loop # if(j == pixelsize) i++
@@ -263,6 +262,8 @@ end_pixel_loop:
     addi totalsize, -BUFFER_PIXELS # subtract buffer length in pixels for the buffer loop
     bgtz totalsize, buffer_loop
     nop
+
+
     # Done! Go back to main loop
     # NOTE: we can't do "jr ra" here as "ra" was discarded by the previous DMA function calls.
     # Jumping to RSPQ_Loop is the standard way to finish an overlay command, in these cases.
