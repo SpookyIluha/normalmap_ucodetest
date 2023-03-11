@@ -139,12 +139,11 @@ BlendCmd_NormalMapSetSources:
 
     #define pixelcount t0
     #define nrm_buf    t1
-    #define i_val      t2
-    #define j_val      t3
     #define n_shiftX   t4
     #define n_shiftY   t5
     #define X_val      t6
     #define Y_val      t7
+    #define count      t8
 
 
 BlendCmd_NormalMapReflect:
@@ -171,8 +170,7 @@ BlendCmd_NormalMapReflect:
     jal DMAInAsync
     addi t0, -1
 
-    li i_val, 0 # store i for the pixel loop
-    li j_val, 0 # store j for the pixel loop
+    li count, 0 # store j for the pixel loop
     add pixelsize, -1
 buffer_loop:
     # Fetch normalmap buffer into DMEM. This is a sync version that will
@@ -209,16 +207,17 @@ pixel_loop:
     srav n_shiftX, n_shiftX, strength    #      int n_shiftX = (normalmap->r - 128) >> strength;
     srav n_shiftY, n_shiftY, strength    #      int n_shiftY = (normalmap->g - 128) >> strength;
 
-    move X_val, j_val
+    move X_val, count
     add  X_val, shiftx
     add  X_val, n_shiftX
-    and  X_val, pixelsize    #      int x = (j + shiftx + n_shiftX) % pixelsize;
+    and  X_val, pixelsize    #      int x = (count + shiftx + n_shiftX) % pixelsize;
 
-    move Y_val, i_val
+    move Y_val, count
+    srl  Y_val, size
     add  Y_val, shifty
     sub  Y_val, n_shiftY
     and  Y_val, pixelsize
-    sllv Y_val, Y_val, size    #      int y = ((i + shifty - n_shiftY) % pixelsize) << size;
+    sllv Y_val, Y_val, size    #      int y = (((count >> size) + shifty - n_shiftY) % pixelsize) << size;
 
     add n_shiftX, X_val, Y_val # x+y
     sll n_shiftX, 1 # (x+y)*2
@@ -227,11 +226,7 @@ pixel_loop:
 
     addi nrm_buf, 4
     addi dest_buf, 2 # normalmap++, destmap++
-    addi i_val, 1 # j++
-    beq  i_val, pixelsize, end_pixel_loop # if(j == pixelsize) i++
-    nop
-    li   i_val, 0
-    addi j_val, 1 # i++
+    addi count, 1
 
 end_pixel_loop:
     # 1 pixel done, check if we're done
