@@ -61,9 +61,14 @@ VCONST:     .half 0x1F << 10    # 5-bit mask in bits 14..10
 
     .balign 8    # Buffers accessed via DMA must be 8-byte aligned
 
-NRM_BUF:    .dcb.b  128*4+8     # normalmap image buffer (+ 8 bytes to handle misalignment of RDRAM pointer)
-DST_BUF:    .dcb.b  128*2       # destmap image buffer
-ENV_BUF:    .dcb.b  2048        # envmap image buffer
+#define BUFFER_PIXELS 128
+#define BUFFER_ENV_SIZ 2048
+#define RGBA32_BYTES 4
+#define RGBA16_BYTES 2
+
+NRM_BUF:    .dcb.b  BUFFER_PIXELS*RGBA32_BYTES+8     # normalmap image buffer (+ 8 bytes to handle misalignment of RDRAM pointer)
+DST_BUF:    .dcb.b  BUFFER_PIXELS*RGBA16_BYTES       # destmap image buffer
+ENV_BUF:    .dcb.b  BUFFER_ENV_SIZ                   # envmap image buffer
 
     .text
 
@@ -134,12 +139,12 @@ BlendCmd_NormalMapSetSources:
 
     #define pixelcount t0
     #define nrm_buf    t1
-    #define i_val     t2
-    #define j_val     t3
+    #define i_val      t2
+    #define j_val      t3
     #define n_shiftX   t4
     #define n_shiftY   t5
-    #define X_val     t6
-    #define Y_val     t7
+    #define X_val      t6
+    #define Y_val      t7
 
 
 BlendCmd_NormalMapReflect:
@@ -162,7 +167,7 @@ BlendCmd_NormalMapReflect:
     # can just continue.
     lw s0, %lo(ENV_SRC_RDRAM)
     li s4, %lo(ENV_BUF)
-    li t0, 2048
+    li t0, BUFFER_ENV_SIZ
     jal DMAInAsync
     addi t0, -1
 
@@ -177,12 +182,12 @@ buffer_loop:
     # we need to fetch 8 bytes more to make sure the correct pixels are fetched.
     lw s0, %lo(NRM_SRC_RDRAM)
     li s4, %lo(NRM_BUF)
-    li t0, 512
+    li t0, BUFFER_PIXELS*RGBA32_BYTES
     jal DMAIn
     addi t0, +8-1
 
 
-    li pixelcount, 128 # store buffer length in pixels for the pixel loop
+    li pixelcount, BUFFER_PIXELS # store buffer length in pixels for the pixel loop
     lw nrm_buf, %lo(NRM_BUF)
     lw dest_buf, %lo(DST_BUF)
 
@@ -242,20 +247,20 @@ end_pixel_loop:
     # Now DMA back into RDRAM
     lw s0, %lo(DST_SRC_RDRAM)
     li s4, %lo(DST_BUF)
-    li t0, 256
+    li t0, BUFFER_PIXELS*RGBA16_BYTES
     jal DMAOut
     addi t0, +8-1
 
     # Increment pointer of the source image by the buffer amount. Next loop,
     # we'll fetch the next buffer.
     lw t4, %lo(DST_SRC_RDRAM)
-    addi t4, 256
+    addi t4, BUFFER_PIXELS*RGBA16_BYTES
     sw t4, %lo(DST_SRC_RDRAM)
 
     lw t4, %lo(NRM_SRC_RDRAM)
-    addi t4, 512
+    addi t4, BUFFER_PIXELS*RGBA32_BYTES
     sw t4, %lo(NRM_SRC_RDRAM)
-    addi totalsize, -128 # subtract buffer length in pixels for the buffer loop
+    addi totalsize, -BUFFER_PIXELS # subtract buffer length in pixels for the buffer loop
     bgtz totalsize, buffer_loop
     nop
     # Done! Go back to main loop
