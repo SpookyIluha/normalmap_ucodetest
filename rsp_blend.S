@@ -109,11 +109,11 @@ BlendCmd_NormalMapSetSources:
     #  for(int i = 0; i < pixelsize; i++){
     #    for(int j = 0; j < pixelsize; j++, normalmap++, destmap++){
     #      
-    #      int n_shiftx = (normalmap->r - 128) >> strength;
-    #      int n_shifty = (normalmap->g - 128) >> strength;
+    #      int n_shiftX = (normalmap->r - 128) >> strength;
+    #      int n_shiftY = (normalmap->g - 128) >> strength;
     #      
-    #      int x = (j + shiftx + n_shiftx) % pixelsize;
-    #      int y = ((i + shifty - n_shifty) % pixelsize) << size;
+    #      int x = (j + shiftx + n_shiftX) % pixelsize;
+    #      int y = ((i + shifty - n_shiftY) % pixelsize) << size;
     #
     #      *destmap = envmap[x + y];
     #    }
@@ -126,10 +126,21 @@ BlendCmd_NormalMapSetSources:
 
     #define pixelsize s1
     #define totalsize s2
+    #define dest_buf  s3
     #define size      a0
     #define shiftx    a1
     #define shifty    a2
     #define strength  a3
+
+    #define pixelcount t0
+    #define nrm_buf    t1
+    #define i_val     t2
+    #define j_val     t3
+    #define n_shiftX   t4
+    #define n_shiftY   t5
+    #define X_val     t6
+    #define Y_val     t7
+
 
 BlendCmd_NormalMapReflect:
 
@@ -155,8 +166,8 @@ BlendCmd_NormalMapReflect:
     jal DMAInAsync
     addi t0, -1
 
-    li t2, 0 # store i for the pixel loop
-    li t3, 0 # store j for the pixel loop
+    li i_val, 0 # store i for the pixel loop
+    li j_val, 0 # store j for the pixel loop
     add pixelsize, -1
 buffer_loop:
     # Fetch normalmap buffer into DMEM. This is a sync version that will
@@ -171,61 +182,61 @@ buffer_loop:
     addi t0, +8-1
 
 
-    li t0, 128 # store buffer length in pixels for the pixel loop
-    lw t1, %lo(NRM_BUF)
-    lw s3, %lo(DST_BUF)
+    li pixelcount, 128 # store buffer length in pixels for the pixel loop
+    lw nrm_buf, %lo(NRM_BUF)
+    lw dest_buf, %lo(DST_BUF)
 
 pixel_loop:
 
     # t0 - pixel buffer counter         # s1 - pixelsize
     # t1 - NRM_BUF                      # s2 - totalsize
-    # t3 - i                            # s3 - DST_BUF
-    # t2 - j
+    # t2 - i                            # s3 - DST_BUF
+    # t3 - j
     # a0 - size 
     # a1 - shiftx  
     # a2 - shifty
     # a3 - strength
 
-    addi t1, 1
-    li t4, 0
-    lb t4, (t1)   #      int n_shiftx = normalmap->r;
-    addi t1, 1
-    li t5, 0
-    lb t5, (t1)   #      int n_shiftx = normalmap->g;
-    addi t4, -128   
-    addi t5, -128
-    srlv t4, t4, strength    #      int n_shiftx = (normalmap->r - 128) >> strength;
-    srlv t5, t5, strength    #      int n_shifty = (normalmap->g - 128) >> strength;
+    addi nrm_buf, 1
+    li n_shiftX, 0
+    lb n_shiftX, (nrm_buf)   #      int n_shiftX = normalmap->r;
+    addi nrm_buf, 1
+    li n_shiftY, 0
+    lb n_shiftY, (nrm_buf)   #      int n_shiftX = normalmap->g;
+    addi n_shiftX, -128   
+    addi n_shiftY, -128
+    srlv n_shiftX, n_shiftX, strength    #      int n_shiftX = (normalmap->r - 128) >> strength;
+    srlv n_shiftY, n_shiftY, strength    #      int n_shiftY = (normalmap->g - 128) >> strength;
 
-    move t6, t2
-    add t6, shiftx
-    add t6, t4
-    and t6, pixelsize    #      int x = (j + shiftx + n_shiftx) % pixelsize;
+    move X_val, i_val
+    add X_val, shiftx
+    add X_val, n_shiftX
+    and X_val, pixelsize    #      int x = (j + shiftx + n_shiftX) % pixelsize;
 
-    move t7, t3
-    add t7, shiftx
-    add t7, t4
-    and t7, pixelsize
-    sllv  t7, t7, size    #      int y = ((i + shifty - n_shifty) % pixelsize) << size;
+    move Y_val, j_val
+    add Y_val, shiftx
+    add Y_val, n_shiftX
+    and Y_val, pixelsize
+    sllv  Y_val, Y_val, size    #      int y = ((i + shifty - n_shiftY) % pixelsize) << size;
 
-    lw  t5, %lo(ENV_BUF)
-    add t5, t5, t6
-    add t5, t5, t7 # envmap[x + y];
-    lh  t4, (t5)
-    sh  t4, (s3)  # *destmap = envmap[x + y];
+    lw  n_shiftY, %lo(ENV_BUF)
+    add n_shiftY, n_shiftY, X_val
+    add n_shiftY, n_shiftY, Y_val # envmap[x + y];
+    lh  n_shiftX, (n_shiftY)
+    sh  n_shiftX, (dest_buf)  # *destmap = envmap[x + y];
 
-    addi t1, 2
-    addi s2, 2 # normalmap++, destmap++
-    addi t3, 1 # j++
-    beq  t3, pixelsize, end_pixel_loop # if(j == pixelsize) i++
+    addi nrm_buf, 2
+    addi dest_buf, 2 # normalmap++, destmap++
+    addi j_val, 1 # j++
+    beq  j_val, pixelsize, end_pixel_loop # if(j == pixelsize) i++
     nop
-    li   t3, 0
-    addi t2, 1 # i++
+    li   j_val, 0
+    addi i_val, 1 # i++
 
 end_pixel_loop:
     # 1 pixel done, check if we're done
-    addi t0, -1
-    bgtz t0, pixel_loop
+    addi pixelcount, -1
+    bgtz pixelcount, pixel_loop
     nop
     
     # Now DMA back into RDRAM
@@ -250,7 +261,6 @@ end_pixel_loop:
     # Done! Go back to main loop
     # NOTE: we can't do "jr ra" here as "ra" was discarded by the previous DMA function calls.
     # Jumping to RSPQ_Loop is the standard way to finish an overlay command, in these cases.
-
     j RSPQ_Loop 
     nop
 
