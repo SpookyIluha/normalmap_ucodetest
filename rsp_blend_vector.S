@@ -149,17 +149,14 @@ BlendCmd_NormalMapSetSources:
 
     #define pixelcount t0
     #define nrm_buf    t1
-    #define n_shiftX   t4
-    #define n_shiftY   t5
-    #define X_val      t6
-    #define Y_val      t7
-    #define count      t8
 
-    #define Vn_shiftX   v1
-    #define Vn_shiftY   v2
-    #define VX_val      v3
-    #define VY_val      v4
-    #define Vcount      v8
+    #define n_shiftX   v1
+    #define n_shiftY   v2
+    #define X_val      v3
+    #define Y_val      v4
+    #define Vshiftx    v5
+    #define Vshifty    v6
+    #define vindex     v8
 
 BlendCmd_NormalMapReflect:
 
@@ -179,8 +176,10 @@ BlendCmd_NormalMapReflect:
     jal DMAInAsync
     addi t0, -1
 
-    luv Vcount,  %lo(VINDEX) # store indices for the pixel loop
+    la t0, %lo(VINDEX)
+    luv vindex,  0,t0 # store indices for the pixel loop
     add pixelsize, -1
+
 buffer_loop:
     # Fetch normalmap buffer into DMEM. This is a sync version that will
     # wait for this (and the previous!) DMA to complete.
@@ -207,32 +206,34 @@ pixel_loop:
     # a2 - shifty
     # a3 - strength
 
-    # v1 - Vn_shiftX
-    # v2 - Vn_shiftY
-    # v3 - VX_val
-    # v4 - VY_val
-    # v8 - Vcount
+    # v1 - n_shiftX
+    # v2 - n_shiftY
+    # v3 - X_val
+    # v4 - Y_val
+    # v5 - Vshiftx
+    # v6 - Vshifty
+    # v8 - vindex
 
-    luv   Vn_shiftX, 0,nrm_buf  #      int n_shiftX = normalmap->x;
-    luv   Vn_shiftY, 8,nrm_buf  #      int n_shiftY = normalmap->y;
+    luv   n_shiftX, 0,nrm_buf  #      int n_shiftX = normalmap->x;
+    luv   n_shiftY, 8,nrm_buf  #      int n_shiftY = normalmap->y;
 
-    vsubc Vn_shiftX, K128
-    vsubc Vn_shiftY, K128
+    vsubc n_shiftX, K128
+    vsubc n_shiftY, K128
 
-    vsra  Vn_shiftX, Vn_shiftX, 4   #      int n_shiftX = (normalmap->x - 128) >> strength;
-    vsra  Vn_shiftY, Vn_shiftY, 4   #      int n_shiftY = (normalmap->y - 128) >> strength;
+    vsra  n_shiftX, n_shiftX, 4   #      int n_shiftX = (normalmap->x - 128) >> strength;
+    vsra  n_shiftY, n_shiftY, 4   #      int n_shiftY = (normalmap->y - 128) >> strength;
 
-    vmov  VX_val, Vcount
-    vadd  VX_val, Vshiftx
-    vadd  VX_val, Vn_shiftX
-    vand  VX_val, K32       #      int x = (count + shiftx + n_shiftX) % pixelsize;
+    vmov  X_val, vindex
+    vadd  X_val, Vshiftx
+    vadd  X_val, n_shiftX
+    vand  X_val, K32       #      int x = (count + shiftx + n_shiftX) % pixelsize;
 
-    vmov  VY_val, Vcount
-    vsrl  VY_val, VY_val, 5
-    vsub  VY_val, Vshifty   #      this line is either sub or add depends on whether you use DirectX/OpenGL normal maps respectively
-    vadd  VY_val, Vn_shiftY
-    vand  VY_val, K32
-    vsll  VY_val, VY_val, 5   #      int y = (((count >> size) + shifty - n_shiftY) % pixelsize) << size;
+    vmov  Y_val, vindex
+    vsrl  Y_val, Y_val, 5
+    vsub  Y_val, Vshifty   #      this line is either sub or add depends on whether you use DirectX/OpenGL normal maps respectively
+    vadd  Y_val, n_shiftY
+    vand  Y_val, K32
+    vsll  Y_val, Y_val, 5   #      int y = (((count >> size) + shifty - n_shiftY) % pixelsize) << size;
 
     #TODO: Fetch offsets from the vector and write to dest_buf
 
@@ -243,7 +244,7 @@ pixel_loop:
 
     addi nrm_buf,  NORM16_BYTES*PX_PER_VECTOR
     addi dest_buf, RGBA16_BYTES*PX_PER_VECTOR # normalmap++, destmap++
-    vadd Vcount, K8
+    vadd vindex, K8
 
 end_pixel_loop:
     # 8 pixels done, check if we're done
