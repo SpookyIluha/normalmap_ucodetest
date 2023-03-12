@@ -162,7 +162,12 @@ BlendCmd_NormalMapSetSources:
     #define vaddress   $v09
     #define vresult    $v10
     #define values     $v11
-    #define kpixelsize  $v11.e0
+    #define kpixelsize $v11.e0
+    #define ksize       $v11.e1
+    #define ksize2      $v11.e5
+    #define kshiftx     $v11.e2
+    #define kshifty     $v11.e3
+    #define kstrength   $v11.e4
 
 BlendCmd_NormalMapReflect:
 
@@ -189,7 +194,22 @@ BlendCmd_NormalMapReflect:
 
     li t0, %lo(ENV_BUF)
     mtc2 t0, vaddress.e0
+
+    li t0, 1<<16
+    srav strength, t0, strength
+
+    li t0, 1<<16
+    srav t0, t0, size
+    mtc2 t0, ksize
+
+    li t0, 1
+    sllv t0, t0, size
+    mtc2 t0, ksize2
+
     mtc2 pixelsize, kpixelsize
+    mtc2 shiftx, kshiftx
+    mtc2 shifty, kshifty
+    mtc2 strength, kstrength
 
 buffer_loop:
     # Fetch normalmap buffer into DMEM. This is a sync version that will
@@ -230,26 +250,25 @@ pixel_loop:
     vsra  n_shiftX, n_shiftX, 7
     vsra  n_shiftY, n_shiftY, 7
 
-    vsubc n_shiftX, K128
+    vsubc n_shiftX, K128    # these 2 lines are not strictly necessary, but without them the strength would affect the offset of envmap
     vsubc n_shiftY, K128
 
-    vsra  n_shiftX, n_shiftX, 4   #      int n_shiftX = (normalmap->x - 128) >> strength;
-    vsra  n_shiftY, n_shiftY, 4   #      int n_shiftY = (normalmap->y - 128) >> strength;
+    vmudm  n_shiftX, kstrength   #      int n_shiftX = (normalmap->x - 128) >> strength;
+    vmudm  n_shiftY, kstrength   #      int n_shiftY = (normalmap->y - 128) >> strength;
 
     vor   X_val, vindex, vzero
-    #vadd  X_val, Vshiftx
+    vadd  X_val, kshiftx
     vadd  X_val, n_shiftX
     vand  X_val, kpixelsize       #      int x = (index + shiftx + n_shiftX) % pixelsize;
 
     vor   Y_val, vindex, vzero
-    vsrl  Y_val, Y_val, 5
-    #vsub  Y_val, Vshifty   #      this line is either sub or add depends on whether you use DirectX/OpenGL normal maps respectively
+    vmudl  Y_val, Y_val, ksize
+    vsub  Y_val, kshifty   #      this line is either sub or add depends on whether you use DirectX/OpenGL normal maps respectively
     vsub  Y_val, n_shiftY
     vand  Y_val, kpixelsize
-    vsll  Y_val, Y_val, 5   #      int y = (((index >> size) + shifty - n_shiftY) % pixelsize) << size;
+    vmudn  Y_val, Y_val, ksize2   #      int y = (((index >> size) + shifty - n_shiftY) % pixelsize) << size;
 
     vadd n_shiftX, X_val, Y_val # x+y
-    #vadd n_shiftX, vindex, vzero # x+y
     vsll n_shiftX, n_shiftX, 1 # (x+y)*2
 
     vadd n_shiftX, vaddress.e0 # pre-add the address to all values
