@@ -17,7 +17,7 @@ rdpq_font_t *fnt1;
 int shiftx = 0;
 int shifty = 0;
 int usec = 0;
-int mode = 4;
+int mode = 1;
 
 
 static uint32_t ovl_id;
@@ -137,8 +137,8 @@ void render(int cur_frame)
 
 int main(void)
 {
-	//debug_init_isviewer();
-	//debug_init_usblog();
+	debug_init_isviewer();
+	debug_init_usblog();
     display_init(RESOLUTION_320x240, DEPTH_16_BPP, 3, GAMMA_NONE, ANTIALIAS_RESAMPLE);
 
     controller_init();
@@ -192,8 +192,8 @@ int main(void)
     {
         rspq_wait(); // finish whatever is pending
         long long t0 = timer_ticks();
-
-        normalmap_reflect_rspq16((NORM16PAK*)normal_pack_surf.buffer, (RGBA16*)tiles_surf.buffer, (RGBA16*)dest_surface.buffer, 5, shiftx, shifty, mode);
+        for(int i = 0; i < mode; i++)
+            normalmap_reflect_rspq16((NORM16PAK*)normal_pack_surf.buffer, (RGBA16*)tiles_surf.buffer, (RGBA16*)dest_surface.buffer, 5, shiftx, shifty, mode);
 
         // Wait until RSP+RDP are idle. This is normally not required, but we force it here
         // to measure the exact frame computation time.
@@ -212,7 +212,7 @@ int main(void)
         if (contheld.c[0].C_left) shiftx++; 
         if (contheld.c[0].C_right) shiftx--;
         if (conttrigger.c[0].Z) mode++;
-        mode = mode % 8;
+        mode = mode % 16;
 
         cur_frame++;
     }
