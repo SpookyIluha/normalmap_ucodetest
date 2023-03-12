@@ -75,9 +75,11 @@ VINDEX:     .byte 0             # index array from 0 to 7
 #define NORM16_BYTES 2
 #define RGBA16_BYTES 2
 #define PX_PER_VECTOR 8
-
-NRM_BUF:    .dcb.b  BUFFER_PIXELS*NORM16_BYTES+8     # normalmap image buffer (+ 8 bytes to handle misalignment of RDRAM pointer)
+    .balign 16    # Buffers accessed via DMA must be 8-byte aligned
+NRM_BUF:    .dcb.b  BUFFER_PIXELS*NORM16_BYTES       # normalmap image buffer (+ 8 bytes to handle misalignment of RDRAM pointer)
+    .balign 16    # Buffers accessed via DMA must be 8-byte aligned
 DST_BUF:    .dcb.b  BUFFER_PIXELS*RGBA16_BYTES       # destmap image buffer
+    .balign 16    # Buffers accessed via DMA must be 8-byte aligned
 ENV_BUF:    .dcb.b  BUFFER_ENV_SIZ                   # envmap image buffer
 
     .text
@@ -157,8 +159,10 @@ BlendCmd_NormalMapSetSources:
     #define Vshiftx    $v05
     #define Vshifty    $v06
     #define vindex     $v08
-    #define vaddress     $v09
-    #define vresult     $v10
+    #define vaddress   $v09
+    #define vresult    $v10
+    #define values     $v11
+    #define kpixelsize  $v11.e0
 
 BlendCmd_NormalMapReflect:
 
@@ -185,6 +189,7 @@ BlendCmd_NormalMapReflect:
 
     li t0, %lo(ENV_BUF)
     mtc2 t0, vaddress.e0
+    mtc2 pixelsize, kpixelsize
 
 buffer_loop:
     # Fetch normalmap buffer into DMEM. This is a sync version that will
@@ -220,33 +225,32 @@ pixel_loop:
     # v6 - Vshifty
     # v8 - vindex
 
-    #luv   n_shiftX, 0,nrm_buf  #      int n_shiftX = normalmap->x;
-    #luv   n_shiftY, 8,nrm_buf  #      int n_shiftY = normalmap->y;
-    #vsra  n_shiftX, n_shiftX, 7
-    #vsra  n_shiftY, n_shiftY, 7
+    luv   n_shiftX, 0,nrm_buf  #      int n_shiftX = normalmap->x;
+    luv   n_shiftY, 8,nrm_buf  #      int n_shiftY = normalmap->y;
+    vsra  n_shiftX, n_shiftX, 7
+    vsra  n_shiftY, n_shiftY, 7
 
-    #vsubc n_shiftX, K128
-    #vsubc n_shiftY, K128
+    vsubc n_shiftX, K128
+    vsubc n_shiftY, K128
 
-    #vsra  n_shiftX, n_shiftX, 4   #      int n_shiftX = (normalmap->x - 128) >> strength;
-    #vsra  n_shiftY, n_shiftY, 4   #      int n_shiftY = (normalmap->y - 128) >> strength;
+    vsra  n_shiftX, n_shiftX, 4   #      int n_shiftX = (normalmap->x - 128) >> strength;
+    vsra  n_shiftY, n_shiftY, 4   #      int n_shiftY = (normalmap->y - 128) >> strength;
 
-    #vor   X_val, vindex, vzero
+    vor   X_val, vindex, vzero
     #vadd  X_val, Vshiftx
-    #vadd  X_val, n_shiftX
-    #vand  X_val, K32       #      int x = (count + shiftx + n_shiftX) % pixelsize;
+    vadd  X_val, n_shiftX
+    vand  X_val, kpixelsize       #      int x = (index + shiftx + n_shiftX) % pixelsize;
 
-    #vor   Y_val, vindex, vzero
-    #vsrl  Y_val, Y_val, 5
+    vor   Y_val, vindex, vzero
+    vsrl  Y_val, Y_val, 5
     #vsub  Y_val, Vshifty   #      this line is either sub or add depends on whether you use DirectX/OpenGL normal maps respectively
-    #vadd  Y_val, n_shiftY
-    #vand  Y_val, K32
-    #vsll  Y_val, Y_val, 5   #      int y = (((count >> size) + shifty - n_shiftY) % pixelsize) << size;
+    vsub  Y_val, n_shiftY
+    vand  Y_val, kpixelsize
+    vsll  Y_val, Y_val, 5   #      int y = (((index >> size) + shifty - n_shiftY) % pixelsize) << size;
 
-    #vadd n_shiftX, X_val, Y_val # x+y
-    vadd n_shiftX, vindex, vzero # x+y
+    vadd n_shiftX, X_val, Y_val # x+y
+    #vadd n_shiftX, vindex, vzero # x+y
     vsll n_shiftX, n_shiftX, 1 # (x+y)*2
-
 
     vadd n_shiftX, vaddress.e0 # pre-add the address to all values
 
@@ -266,9 +270,9 @@ pixel_loop:
     lsv vresult.e4, 0,t8 # *destmap = envmap[x + y];
     lsv vresult.e5, 0,t9 # *destmap = envmap[x + y];
     lsv vresult.e6, 0,s6 # *destmap = envmap[x + y];
-    lsv vresult.e7, 0,t7 # *destmap = envmap[x + y];
+    lsv vresult.e7, 0,s7 # *destmap = envmap[x + y];
 
-    sqv vresult, 0,dest_buf
+    sqv vresult, 0, dest_buf
 
     addi nrm_buf,  NORM16_BYTES*PX_PER_VECTOR
     addi dest_buf, RGBA16_BYTES*PX_PER_VECTOR # normalmap++, destmap++
