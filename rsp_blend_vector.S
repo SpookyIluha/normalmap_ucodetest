@@ -179,7 +179,7 @@ BlendCmd_NormalMapReflect:
     jal DMAInAsync
     addi t0, -1
 
-    luv Vcount, VINDEX # store indices for the pixel loop
+    luv Vcount,  %lo(VINDEX) # store indices for the pixel loop
     add pixelsize, -1
 buffer_loop:
     # Fetch normalmap buffer into DMEM. This is a sync version that will
@@ -189,7 +189,7 @@ buffer_loop:
     # we need to fetch 8 bytes more to make sure the correct pixels are fetched.
     lw s0, %lo(NRM_SRC_RDRAM)
     li s4, %lo(NRM_BUF)
-    li t0, BUFFER_PIXELS*RGBA32_BYTES
+    li t0, BUFFER_PIXELS*NORM16_BYTES
     jal DMAIn
     addi t0, +8-1
 
@@ -228,7 +228,7 @@ pixel_loop:
     vand  VX_val, K32       #      int x = (count + shiftx + n_shiftX) % pixelsize;
 
     vmov  VY_val, Vcount
-    vsrl  VY_val,  5
+    vsrl  VY_val, VY_val, 5
     vsub  VY_val, Vshifty   #      this line is either sub or add depends on whether you use DirectX/OpenGL normal maps respectively
     vadd  VY_val, Vn_shiftY
     vand  VY_val, K32
@@ -264,7 +264,7 @@ end_pixel_loop:
     sw t4, %lo(DST_SRC_RDRAM)
 
     lw t4, %lo(NRM_SRC_RDRAM)
-    addi t4, BUFFER_PIXELS*RGBA32_BYTES
+    addi t4, BUFFER_PIXELS*NORM16_BYTES
     sw t4, %lo(NRM_SRC_RDRAM)
     addi totalsize, -BUFFER_PIXELS # subtract buffer length in pixels for the buffer loop
     bgtz totalsize, buffer_loop
