@@ -195,8 +195,9 @@ BlendCmd_NormalMapReflect:
     li t0, %lo(ENV_BUF)
     mtc2 t0, vaddress.e0
 
-    li t0, 1<<16
+    li t0, 1<<16>>7
     srav strength, t0, strength
+    mtc2 strength, kstrength
 
     li t0, 1<<16
     srav t0, t0, size
@@ -209,7 +210,6 @@ BlendCmd_NormalMapReflect:
     mtc2 pixelsize, kpixelsize
     mtc2 shiftx, kshiftx
     mtc2 shifty, kshifty
-    mtc2 strength, kstrength
 
 buffer_loop:
     # Fetch normalmap buffer into DMEM. This is a sync version that will
@@ -245,14 +245,8 @@ pixel_loop:
     # v6 - Vshifty
     # v8 - vindex
 
-    luv   n_shiftX, 0,nrm_buf  #      int n_shiftX = normalmap->x;
-    luv   n_shiftY, 8,nrm_buf  #      int n_shiftY = normalmap->y;
-    vsra  n_shiftX, n_shiftX, 7
-    vsra  n_shiftY, n_shiftY, 7
-
-    vsubc n_shiftX, K128    # these 2 lines are not strictly necessary, but without them the strength would affect the offset of envmap
-    vsubc n_shiftY, K128
-
+    lpv   n_shiftX, 0,nrm_buf  #      int n_shiftX = normalmap->x;
+    lpv   n_shiftY, 8,nrm_buf  #      int n_shiftY = normalmap->y;
     vmudm  n_shiftX, kstrength   #      int n_shiftX = (normalmap->x - 128) >> strength;
     vmudm  n_shiftY, kstrength   #      int n_shiftY = (normalmap->y - 128) >> strength;
 

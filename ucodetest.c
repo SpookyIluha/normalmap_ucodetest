@@ -68,7 +68,7 @@ void rsp_blend_vector_normalmap_reflect(int size, int shiftx, int shifty, int st
 /// @param shifty Shift the environment texture y amount of pixels with wrapping before reflecting
 /// @param strength Power of 2 strength of the normal map in pixels (e.g 4 -> reflections can deviate up to 16 pixels, 5 -> 32 pixels etc.)
 void normalmap_reflect_rspq16(NORM16PAK* normalmap, RGBA16* envmap, RGBA16* destmap, int size, int shiftx, int shifty, int strength){
-  strength = 8 - strength; shiftx += (1<<16); shifty += (1<<16);
+  strength = 8 - strength; shiftx += (1<<16); shifty = (1<<16) - shifty;
   rsp_blend_vector_normalmap_set_sources(normalmap, envmap, destmap);
   rsp_blend_vector_normalmap_reflect(size, shiftx, shifty, strength);
 }
@@ -78,29 +78,16 @@ void normalmap_reflect_rspq16(NORM16PAK* normalmap, RGBA16* envmap, RGBA16* dest
 /// @param normalmap Pointer to the raw 32-bit standard normal map texture
 /// @param output Pointer to the raw 16-bit texture to store the result onto
 /// @param size A power of 2 size of the square textures (e.g 4 -> 16 pixels, 5 -> 32 pixels etc.)
-void normalmap_packimage_b(RGBA32* normalmap, NORM16PAK* output, int size){
-    int totalsize = 2<<size<<size; uint8_t* outmap = (uint8_t*)output;
-    int sizenorm = sizeof(NORM16PAK); int sizeplane = sizeof(uba64_t);
-    for(int i = 0; i < totalsize; i++){
-        if((i % sizenorm) < sizeplane)  outmap[i] = normalmap[i - (i / sizenorm)*sizeplane].r;
-        else                            outmap[i] = normalmap[i - (i / sizenorm)*sizeplane - sizeplane].g;
-    }
-}
-
-/// @brief Split the R/G channels into 8byte interleaved planes for the RSP implementation format. Can be called just once per image loading from a file. Output format is RRRRRRRRGGGGGGGG.
-/// @param normalmap Pointer to the raw 32-bit standard normal map texture
-/// @param output Pointer to the raw 16-bit texture to store the result onto
-/// @param size A power of 2 size of the square textures (e.g 4 -> 16 pixels, 5 -> 32 pixels etc.)
 
 void normalmap_packimage(RGBA32* normalmap, NORM16PAK* output, int size){
     int totalsize = 2<<size<<size;     int sizeplane = sizeof(uba64_t);
-    uint8_t* outX = (uint8_t*)output;
-    uint8_t* outY = (uint8_t*)output + sizeplane;
+    int8_t* outX = (int8_t*)output;
+    int8_t* outY = (int8_t*)output + sizeplane;
     
     for(int i = 0; i < totalsize / sizeplane; i++, outX+=sizeplane, outY+=sizeplane){
         for(int  j = 0; j < sizeplane; j++, normalmap++, outX++, outY++){
-            *outX = normalmap->r;
-            *outY = normalmap->g;
+            *outX = normalmap->r - 128;
+            *outY = normalmap->g - 128;
         }
     }
 }
@@ -127,7 +114,7 @@ void render(int cur_frame)
     // the line below to see.
     //rdpq_debug_log_msg("tiles");
 
-        rdpq_font_begin(RGBA32(0xFF, 0x00, 0x00, 0xFF));
+        rdpq_font_begin(RGBA32(0xFF, 0xFF, 0xFF, 0xFF));
         rdpq_font_position(40, 60);
         rdpq_font_printf(fnt1, "%ld usec", usec);
         rdpq_font_end();
@@ -192,7 +179,7 @@ int main(void)
     {
         rspq_wait(); // finish whatever is pending
         long long t0 = timer_ticks();
-        for(int i = 0; i < mode; i++)
+        //for(int i = 0; i < mode; i++)
             normalmap_reflect_rspq16((NORM16PAK*)normal_pack_surf.buffer, (RGBA16*)tiles_surf.buffer, (RGBA16*)dest_surface.buffer, 5, shiftx, shifty, mode);
 
         // Wait until RSP+RDP are idle. This is normally not required, but we force it here
