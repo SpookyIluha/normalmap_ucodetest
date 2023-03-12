@@ -45,14 +45,6 @@ DST_SRC_RDRAM: .long  0     # Pointer to the destmap image in RDRAM
 RSPQ_EndSavedState
 
     .balign 16
-VCONST:     .half 0x1F << 10    # 5-bit mask in bits 14..10
-            .half 0             # Padding
-            .half 0
-            .half 0
-            .half 0
-            .half 0
-            .half 0
-            .half 0
 
 VINDEX:     .byte 0             # index array from 0 to 7
             .byte 1             
@@ -223,48 +215,29 @@ buffer_loop:
     jal DMAIn
     addi t0, +8-1
 
-
     li pixelcount, BUFFER_PIXELS # store buffer length in pixels for the pixel loop
     la nrm_buf, %lo(NRM_BUF)
     la dest_buf, %lo(DST_BUF)
 
 pixel_loop:
 
-    # t0 - pixel buffer counter         # s1 - pixelsize
-    # t1 - NRM_BUF                      # s2 - totalsize
-    # a0 - size                         # s3 - DST_BUF
-    # a1 - shiftx  
-    # a2 - shifty
-    # a3 - strength
+    lpv   n_shiftX, 0,nrm_buf  #       int n_shiftX = normalmap->x; 
+    lpv   n_shiftY, 8,nrm_buf  #       int n_shiftY = normalmap->y;
+    vmudm n_shiftX, kstrength   #      int n_shiftX = (normalmap->x - 128) >> strength;
+    vmudm n_shiftY, kstrength   #      int n_shiftY = (normalmap->y - 128) >> strength;
 
-    # v1 - n_shiftX
-    # v2 - n_shiftY
-    # v3 - X_val
-    # v4 - Y_val
-    # v5 - Vshiftx
-    # v6 - Vshifty
-    # v8 - vindex
-
-    lpv   n_shiftX, 0,nrm_buf  #      int n_shiftX = normalmap->x;
-    lpv   n_shiftY, 8,nrm_buf  #      int n_shiftY = normalmap->y;
-    vmudm  n_shiftX, kstrength   #      int n_shiftX = (normalmap->x - 128) >> strength;
-    vmudm  n_shiftY, kstrength   #      int n_shiftY = (normalmap->y - 128) >> strength;
-
-    vor   X_val, vindex, vzero
-    vadd  X_val, kshiftx
+    vadd  X_val, vindex, kshiftx
     vadd  X_val, n_shiftX
     vand  X_val, kpixelsize       #      int x = (index + shiftx + n_shiftX) % pixelsize;
 
-    vor   Y_val, vindex, vzero
-    vmudl  Y_val, Y_val, ksize
-    vsub  Y_val, kshifty   #      this line is either sub or add depends on whether you use DirectX/OpenGL normal maps respectively
+    vmudl Y_val, vindex, ksize
+    vadd  Y_val, kshifty   #      this line is either sub or add depends on whether you use DirectX/OpenGL normal maps respectively
     vsub  Y_val, n_shiftY
     vand  Y_val, kpixelsize
-    vmudn  Y_val, Y_val, ksize2   #      int y = (((index >> size) + shifty - n_shiftY) % pixelsize) << size;
+    vmudn Y_val, Y_val, ksize2   #      int y = (((index >> size) + shifty - n_shiftY) % pixelsize) << size;
 
     vadd n_shiftX, X_val, Y_val # x+y
     vsll n_shiftX, n_shiftX, 1 # (x+y)*2
-
     vadd n_shiftX, vaddress.e0 # pre-add the address to all values
 
     mfc2 t4, n_shiftX.e0
