@@ -119,9 +119,6 @@ void render(int cur_frame)
     rdpq_attach_clear(disp, NULL);
     rspq_block_run(tiles_block);
 
-    rdpq_tex_load(TILE0, &normal_pack_surf, 0);
-    rdpq_texture_rectangle(TILE0, 80, 80, 80+64, 80+32, 0, 0);
-
     // Draw the tile background, by playing back the compiled block.
     // This is using copy mode by default, but notice how it can switch
     // to standard mode (aka "1 cycle" in RDP terminology) in a completely

@@ -150,13 +150,13 @@ BlendCmd_NormalMapSetSources:
     #define pixelcount t0
     #define nrm_buf    t1
 
-    #define n_shiftX   v1
-    #define n_shiftY   v2
-    #define X_val      v3
-    #define Y_val      v4
-    #define Vshiftx    v5
-    #define Vshifty    v6
-    #define vindex     v8
+    #define n_shiftX   $v01
+    #define n_shiftY   $v02
+    #define X_val      $v03
+    #define Y_val      $v04
+    #define Vshiftx    $v05
+    #define Vshifty    $v06
+    #define vindex     $v08
 
 BlendCmd_NormalMapReflect:
 
@@ -223,24 +223,47 @@ pixel_loop:
     vsra  n_shiftX, n_shiftX, 4   #      int n_shiftX = (normalmap->x - 128) >> strength;
     vsra  n_shiftY, n_shiftY, 4   #      int n_shiftY = (normalmap->y - 128) >> strength;
 
-    vmov  X_val, vindex
+    vor   X_val, vindex, vzero
     vadd  X_val, Vshiftx
     vadd  X_val, n_shiftX
     vand  X_val, K32       #      int x = (count + shiftx + n_shiftX) % pixelsize;
 
-    vmov  Y_val, vindex
+    vor   Y_val, vindex, vzero
     vsrl  Y_val, Y_val, 5
     vsub  Y_val, Vshifty   #      this line is either sub or add depends on whether you use DirectX/OpenGL normal maps respectively
     vadd  Y_val, n_shiftY
     vand  Y_val, K32
     vsll  Y_val, Y_val, 5   #      int y = (((count >> size) + shifty - n_shiftY) % pixelsize) << size;
 
-    #TODO: Fetch offsets from the vector and write to dest_buf
+    vadd n_shiftX, X_val, Y_val # x+y
+    vsll n_shiftX, n_shiftX, 1 # (x+y)*2
 
-    #add n_shiftX, X_val, Y_val # x+y
-    #sll n_shiftX, 1 # (x+y)*2
-    #lh  n_shiftX, %lo(ENV_BUF)(n_shiftX) # envmap[x+y]
-    #sh  n_shiftX, (dest_buf)  # *destmap = envmap[x + y];
+    mfc2 t4, n_shiftX.e0
+    mfc2 t5, n_shiftX.e1
+    mfc2 t6, n_shiftX.e2
+    mfc2 t7, n_shiftX.e3
+    mfc2 t8, n_shiftX.e4
+    mfc2 t9, n_shiftX.e5
+    mfc2 s6, n_shiftX.e6
+    mfc2 s7, n_shiftX.e7
+
+    lh  t4, %lo(ENV_BUF)(t4) # envmap[x+y]
+    lh  t5, %lo(ENV_BUF)(t5) # envmap[x+y]
+    lh  t6, %lo(ENV_BUF)(t6) # envmap[x+y]
+    lh  t7, %lo(ENV_BUF)(t7) # envmap[x+y]
+    lh  t8, %lo(ENV_BUF)(t8) # envmap[x+y]
+    lh  t9, %lo(ENV_BUF)(t9) # envmap[x+y]
+    lh  s6, %lo(ENV_BUF)(s6) # envmap[x+y]
+    lh  s7, %lo(ENV_BUF)(s7) # envmap[x+y]
+
+    sh  t4, 0(dest_buf)  # *destmap = envmap[x + y];
+    sh  t5, 1(dest_buf)  # *destmap = envmap[x + y];
+    sh  t6, 2(dest_buf)  # *destmap = envmap[x + y];
+    sh  t7, 3(dest_buf)  # *destmap = envmap[x + y];
+    sh  t8, 4(dest_buf)  # *destmap = envmap[x + y];
+    sh  t9, 5(dest_buf)  # *destmap = envmap[x + y];
+    sh  s6, 6(dest_buf)  # *destmap = envmap[x + y];
+    sh  s7, 7(dest_buf)  # *destmap = envmap[x + y];
 
     addi nrm_buf,  NORM16_BYTES*PX_PER_VECTOR
     addi dest_buf, RGBA16_BYTES*PX_PER_VECTOR # normalmap++, destmap++
