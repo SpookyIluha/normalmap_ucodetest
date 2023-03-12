@@ -2,7 +2,7 @@ BUILD_DIR=build
 include $(N64_INST)/include/n64.mk
 
 src = ucodetest.c
-asm = rsp_blend.S
+asm = rsp_blend_vector.S
 assets_xm = $(wildcard assets/*.xm)
 assets_wav = $(wildcard assets/*.wav)
 assets_png = $(wildcard assets/*.png)
