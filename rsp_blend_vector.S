@@ -68,9 +68,15 @@ VINDEX:     .byte 0             # index array from 0 to 7
 #define RGBA16_BYTES 2
 #define PX_PER_VECTOR 8
     .balign 16    # Buffers accessed via DMA must be 8-byte aligned
+NRM_TMP:    .dcb.b  PX_PER_VECTOR*RGBA16_BYTES
+    .balign 16    # Buffers accessed via DMA must be 8-byte aligned
 NRM_BUF:    .dcb.b  BUFFER_PIXELS*NORM16_BYTES       # normalmap image buffer (+ 8 bytes to handle misalignment of RDRAM pointer)
     .balign 16    # Buffers accessed via DMA must be 8-byte aligned
+DST_TMP:    .dcb.b  PX_PER_VECTOR*RGBA16_BYTES       # destmap image buffer adjust for phase shifting
+    .balign 16    # Buffers accessed via DMA must be 8-byte aligned
 DST_BUF:    .dcb.b  BUFFER_PIXELS*RGBA16_BYTES       # destmap image buffer
+    .balign 16    # Buffers accessed via DMA must be 8-byte aligned
+DST_TMPF:   .dcb.b  PX_PER_VECTOR*RGBA16_BYTES
     .balign 16    # Buffers accessed via DMA must be 8-byte aligned
 ENV_BUF:    .dcb.b  BUFFER_ENV_SIZ                   # envmap image buffer
 
@@ -146,6 +152,7 @@ BlendCmd_NormalMapSetSources:
     #define pixelcount t0
     #define nrm_buf    t1
     #define rowcount   s5
+    #define bufferfix  s8
 
     #define n_shiftX   $v01
     #define n_shiftY   $v02
@@ -229,10 +236,11 @@ buffer_loop:
     li t0, BUFFER_PIXELS*NORM16_BYTES
     jal DMAIn
     addi t0, +8-1
+    li bufferfix, 2 # Add an iteration to fix the phase shift of parallelization
 
     li pixelcount, BUFFER_PIXELS # store buffer length in pixels for the buffer loop
     la nrm_buf, %lo(NRM_BUF)
-    la dest_buf, %lo(DST_BUF)
+    la dest_buf, %lo(DST_BUF-PX_PER_VECTOR*RGBA16_BYTES) # Fix the phase shift of parallelization
 
 .align 3
 row_loop:
@@ -272,14 +280,19 @@ end_row_loop:
     # 1 row done, check if we're done with the buffer
     sub  pixelcount, pixelsize
     bgtz pixelcount, row_loop
+    nop
 end_buffer_loop:
 
-    # Now DMA back into RDRAM
-    lw s0, %lo(DST_SRC_RDRAM)
-    li s4, %lo(DST_BUF)
-    li t0, BUFFER_PIXELS*RGBA16_BYTES
-    jal DMAOut
-    addi t0, +8-1
+    addi bufferfix, -1 # Add an iteration to fix the phase shift of parallelization
+    bgtz bufferfix, pixel_loop
+    nop
+
+    # Now DMA back into RDRAM and fix misalignment
+    vsub vindex, K8;            lw s0, %lo(DST_SRC_RDRAM)
+    vsub vindexY, K1;           li s4, %lo(DST_BUF)
+                                li t0, BUFFER_PIXELS*RGBA16_BYTES
+                                jal DMAOut
+                                addi t0, +8-1
 
     # Increment pointer of the source image by the buffer amount. Next loop,
     # we'll fetch the next buffer.
