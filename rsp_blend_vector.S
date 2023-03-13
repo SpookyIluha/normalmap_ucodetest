@@ -131,6 +131,8 @@ BlendCmd_NormalMapSetSources:
     #######################################
     .func BlendCmd_NormalMapReflect
     
+    #define vstall
+
     # Register allocation: define aliases for readability
 
     #define pixelsize s1
@@ -240,12 +242,19 @@ pixel_loop:
     lpv   n_shiftY, 8,nrm_buf  #       int n_shiftY = normalmap->y;
     vmudm n_shiftX, kstrength   #      int n_shiftX = (normalmap->x - 128) >> strength;
     vmudm n_shiftY, kstrength   #      int n_shiftY = (normalmap->y - 128) >> strength;
+    vstall
+    vstall
 
     vadd  X_val, vindex,  n_shiftX
     vsub  Y_val, vindexY, n_shiftY   #      this line is either add or sub depends on whether you use DirectX/OpenGL normal maps respectively
+    vstall
+    vstall
     vand  X_val2, X_val, kpixelsize       #      int x = (index_x + shiftx + n_shiftX) % pixelsize;
+    vstall
     vand  Y_val2, Y_val  kpixelsize
     vmudn Y_val3, Y_val2, ksize2   #      int y = ((index_y + shifty - n_shiftY) % pixelsize) << size;
+    vstall
+    vstall
 
     vmudn vcalcoffset, X_val2, K2 # use MAC to calculate the address into envmap after normal mapping
     vmadn vcalcoffset, Y_val3, K2 # (x+y)*2
@@ -269,17 +278,16 @@ pixel_loop:
     lsv vresult.e6, 0,s6 # *destmap = envmap[x + y];
     lsv vresult.e7, 0,s7 # *destmap = envmap[x + y];
 
-    sqv vresult, 0, dest_buf
-
-
 end_pixel_loop:
-    addi nrm_buf,  NORM16_BYTES*PX_PER_VECTOR
-    addi dest_buf, RGBA16_BYTES*PX_PER_VECTOR # normalmap++, destmap++
+
     vadd vindex, K8
-    # 8 pixels done, check if we're done with the row
+    addi nrm_buf,  NORM16_BYTES*PX_PER_VECTOR
+    addi dest_buf, RGBA16_BYTES*PX_PER_VECTOR # normalmap++, destmap++, index++
     addi rowcount, -PX_PER_VECTOR
-    bgtz rowcount, pixel_loop
-    nop 
+    
+    bgtz rowcount, pixel_loop     # 8 pixels done, check if we're done with the row
+    sqv vresult, -RGBA16_BYTES*PX_PER_VECTOR,dest_buf
+
 end_row_loop:
     vadd vindexY, K1
     # 1 row done, check if we're done with the buffer
