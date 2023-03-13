@@ -18,7 +18,7 @@ int shiftx = 16;
 int shifty = 16;
 int usec = 0;
 int mode = 1;
-
+int mode2 = 3;
 
 static uint32_t ovl_id;
 static void rsp_blend_vector_assert_handler(rsp_snapshot_t *state, uint16_t code);
@@ -117,6 +117,10 @@ void render(int cur_frame)
         rdpq_font_begin(RGBA32(0xFF, 0xFF, 0xFF, 0xFF));
         rdpq_font_position(40, 60);
         rdpq_font_printf(fnt1, "%ld usec", usec);
+        rdpq_font_position(40, 80);
+        rdpq_font_printf(fnt1, "strength: %i", mode2);
+        rdpq_font_position(40, 100);
+        rdpq_font_printf(fnt1, "iterations: %i", mode);
         rdpq_font_end();
 
     rdpq_detach_show();
@@ -124,8 +128,8 @@ void render(int cur_frame)
 
 int main(void)
 {
-	debug_init_isviewer();
-	debug_init_usblog();
+	//debug_init_isviewer();
+	//debug_init_usblog();
     display_init(RESOLUTION_320x240, DEPTH_16_BPP, 3, GAMMA_NONE, ANTIALIAS_RESAMPLE);
 
     controller_init();
@@ -135,8 +139,8 @@ int main(void)
     rsp_init();
     rsp_blend_vector_init();  // init our custom overlay
 
-    tiles_sprite = sprite_load("rom:/env_spec1.sprite");
-    normal_sprite = sprite_load("rom:/normal.sprite");
+    tiles_sprite = sprite_load("rom:/env_spec2.sprite");
+    normal_sprite = sprite_load("rom:/normal2.sprite");
     fnt1 = rdpq_font_load("rom:/Ac437_Tandy2K_G.font64");
 
     surface_t normal_surf = sprite_get_pixels(normal_sprite);
@@ -180,7 +184,7 @@ int main(void)
         rspq_wait(); // finish whatever is pending
         long long t0 = timer_ticks();
         for(int i = 0; i < mode; i++)
-            normalmap_reflect_rspq16((NORM16PAK*)normal_pack_surf.buffer, (RGBA16*)tiles_surf.buffer, (RGBA16*)dest_surface.buffer, 5, shiftx / 4, shifty / 4, 3);
+            normalmap_reflect_rspq16((NORM16PAK*)normal_pack_surf.buffer, (RGBA16*)tiles_surf.buffer, (RGBA16*)dest_surface.buffer, 5, shiftx, shifty, mode2);
 
         // Wait until RSP+RDP are idle. This is normally not required, but we force it here
         // to measure the exact frame computation time.
@@ -200,7 +204,8 @@ int main(void)
         if (contheld.c[0].C_right) shiftx--;
         if (conttrigger.c[0].Z) mode++;
         mode = mode % 16;
-
+        if (conttrigger.c[0].L) mode2++;
+        mode2 = mode2 % 10;
         cur_frame++;
     }
 
