@@ -234,56 +234,35 @@ buffer_loop:
     la nrm_buf, %lo(NRM_BUF)
     la dest_buf, %lo(DST_BUF)
 
+.align 3
 row_loop:
     move rowcount, pixelsize # store row length in pixels for the row loop
 pixel_loop:
 
-    lpv   n_shiftX, 0,nrm_buf  #       int n_shiftX = normalmap->x; 
-    lpv   n_shiftY, 8,nrm_buf  #       int n_shiftY = normalmap->y;
-    vmudm n_shiftX, kstrength   #      int n_shiftX = (normalmap->x - 128) >> strength;
-    vmudm n_shiftY, kstrength   #      int n_shiftY = (normalmap->y - 128) >> strength;
-    vstall
-    vstall
+    lpv   n_shiftX, 0,nrm_buf;                                          #       int n_shiftX = normalmap->x; 
+    lpv   n_shiftY, 8,nrm_buf;                                          #       int n_shiftY = normalmap->y;
+    vmudm n_shiftX, kstrength;              mfc2 t4, vcalcaddress.e0    #      int n_shiftX = (normalmap->x - 128) >> strength;
+    vmudm n_shiftY, kstrength;              mfc2 t5, vcalcaddress.e1    #      int n_shiftY = (normalmap->y - 128) >> strength;
+    vstall;                                 mfc2 t6, vcalcaddress.e2
+    vstall;                                 mfc2 t7, vcalcaddress.e3
 
-    vadd  X_val, vindex,  n_shiftX
-    vsub  Y_val, vindexY, n_shiftY   #      this line is either add or sub depends on whether you use DirectX/OpenGL normal maps respectively
-    vstall
-    vstall
-    vand  X_val2, X_val, kpixelsize       #      int x = (index_x + shiftx + n_shiftX) % pixelsize;
-    vstall
-    vand  Y_val2, Y_val  kpixelsize
-    vmudn Y_val3, Y_val2, ksize2   #      int y = ((index_y + shifty - n_shiftY) % pixelsize) << size;
-    vstall
-    vstall
-
-    vmudn vcalcoffset, X_val2, K2 # use MAC to calculate the address into envmap after normal mapping
-    vmadn vcalcoffset, Y_val3, K2 # (x+y)*2
-    vmadn vcalcaddress, vaddress, K1 # pre-add the address to all values
-
-    mfc2 t4, vcalcaddress.e0
-    mfc2 t5, vcalcaddress.e1
-    mfc2 t6, vcalcaddress.e2
-    mfc2 t7, vcalcaddress.e3
-    mfc2 t8, vcalcaddress.e4
-    mfc2 t9, vcalcaddress.e5
-    mfc2 s6, vcalcaddress.e6
-    mfc2 s7, vcalcaddress.e7
-
-    lsv vresult.e0, 0,t4 # *destmap = envmap[x + y];
-    lsv vresult.e1, 0,t5 # *destmap = envmap[x + y];
-    lsv vresult.e2, 0,t6 # *destmap = envmap[x + y];
-    lsv vresult.e3, 0,t7 # *destmap = envmap[x + y];
-    lsv vresult.e4, 0,t8 # *destmap = envmap[x + y];
-    lsv vresult.e5, 0,t9 # *destmap = envmap[x + y];
-    lsv vresult.e6, 0,s6 # *destmap = envmap[x + y];
-    lsv vresult.e7, 0,s7 # *destmap = envmap[x + y];
+    vadd  X_val, vindex,  n_shiftX;         mfc2 t8, vcalcaddress.e4
+    vsub  Y_val, vindexY, n_shiftY;         mfc2 t9, vcalcaddress.e5    #      this line is either add or sub depends on whether you use DirectX/OpenGL normal maps respectively
+    vstall;                                 mfc2 s6, vcalcaddress.e6
+    vstall;                                 mfc2 s7, vcalcaddress.e7
+    vand  X_val2, X_val, kpixelsize;        lsv vresult.e0, 0,t4 # *destmap = envmap[x + y];        #      int x = (index_x + shiftx + n_shiftX) % pixelsize;
+    vand  Y_val2, Y_val  kpixelsize;        lsv vresult.e1, 0,t5 # *destmap = envmap[x + y];
+    vstall;                                 lsv vresult.e2, 0,t6 # *destmap = envmap[x + y];
+    vstall;                                 lsv vresult.e3, 0,t7 # *destmap = envmap[x + y];
+    vmudn Y_val3, Y_val2, ksize2;           lsv vresult.e4, 0,t8 # *destmap = envmap[x + y];        #      int y = ((index_y + shifty - n_shiftY) % pixelsize) << size;
+    vstall;                                 lsv vresult.e5, 0,t9 # *destmap = envmap[x + y];
+    vstall;                                 lsv vresult.e6, 0,s6 # *destmap = envmap[x + y];
 
 end_pixel_loop:
-
-    vadd vindex, K8
-    addi nrm_buf,  NORM16_BYTES*PX_PER_VECTOR
-    addi dest_buf, RGBA16_BYTES*PX_PER_VECTOR # normalmap++, destmap++, index++
-    addi rowcount, -PX_PER_VECTOR
+    vmudn vcalcoffset, X_val2, K2;          lsv vresult.e7, 0,s7 # *destmap = envmap[x + y];        # use MAC to calculate the address into envmap after normal mapping
+    vmadn vcalcoffset, Y_val3, K2;          addi nrm_buf,  NORM16_BYTES*PX_PER_VECTOR # (x+y)*2
+    vmadn vcalcaddress, vaddress, K1;       addi dest_buf, RGBA16_BYTES*PX_PER_VECTOR # normalmap++, destmap++, index++# pre-add the address to all values
+    vadd vindex, K8;                        addi rowcount, -PX_PER_VECTOR
     
     bgtz rowcount, pixel_loop     # 8 pixels done, check if we're done with the row
     sqv vresult, -RGBA16_BYTES*PX_PER_VECTOR,dest_buf
