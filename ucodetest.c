@@ -14,8 +14,8 @@ static surface_t normal_pack_surf;
 static rspq_block_t *tiles_block;
 rdpq_font_t *fnt1;
 
-int shiftx = 0;
-int shifty = 0;
+int shiftx = 16;
+int shifty = 16;
 int usec = 0;
 int mode = 1;
 
@@ -68,7 +68,7 @@ void rsp_blend_vector_normalmap_reflect(int size, int shiftx, int shifty, int st
 /// @param shifty Shift the environment texture y amount of pixels with wrapping before reflecting
 /// @param strength Power of 2 strength of the normal map in pixels (e.g 4 -> reflections can deviate up to 16 pixels, 5 -> 32 pixels etc.)
 void normalmap_reflect_rspq16(NORM16PAK* normalmap, RGBA16* envmap, RGBA16* destmap, int size, int shiftx, int shifty, int strength){
-  strength = 8 - strength; shiftx += (1<<16); shifty = (1<<16) - shifty;
+  strength = 8 - strength; shiftx += (1<<16); shifty += (1<<16);
   rsp_blend_vector_normalmap_set_sources(normalmap, envmap, destmap);
   rsp_blend_vector_normalmap_reflect(size, shiftx, shifty, strength);
 }
@@ -179,8 +179,8 @@ int main(void)
     {
         rspq_wait(); // finish whatever is pending
         long long t0 = timer_ticks();
-        //for(int i = 0; i < mode; i++)
-            normalmap_reflect_rspq16((NORM16PAK*)normal_pack_surf.buffer, (RGBA16*)tiles_surf.buffer, (RGBA16*)dest_surface.buffer, 5, shiftx, shifty, mode);
+        for(int i = 0; i < mode; i++)
+            normalmap_reflect_rspq16((NORM16PAK*)normal_pack_surf.buffer, (RGBA16*)tiles_surf.buffer, (RGBA16*)dest_surface.buffer, 5, shiftx / 4, shifty / 4, 3);
 
         // Wait until RSP+RDP are idle. This is normally not required, but we force it here
         // to measure the exact frame computation time.
