@@ -228,12 +228,12 @@ buffer_loop:
     jal DMAIn
     addi t0, +8-1
 
-    li pixelcount, BUFFER_PIXELS # store buffer length in pixels for the pixel loop
+    li pixelcount, BUFFER_PIXELS # store buffer length in pixels for the buffer loop
     la nrm_buf, %lo(NRM_BUF)
     la dest_buf, %lo(DST_BUF)
 
 row_loop:
-    move rowcount, pixelsize
+    move rowcount, pixelsize # store row length in pixels for the row loop
 pixel_loop:
 
     lpv   n_shiftX, 0,nrm_buf  #       int n_shiftX = normalmap->x; 
@@ -274,18 +274,20 @@ pixel_loop:
     sqv vresult, 0, dest_buf
 
 
-end_row_loop:
+end_pixel_loop:
     addi nrm_buf,  NORM16_BYTES*PX_PER_VECTOR
     addi dest_buf, RGBA16_BYTES*PX_PER_VECTOR # normalmap++, destmap++
     vadd vindex, K8
-    # 8 pixels done, check if we're done
+    # 8 pixels done, check if we're done with the row
     addi rowcount, -PX_PER_VECTOR
     bgtz rowcount, pixel_loop
     nop 
+end_row_loop:
     vadd vindexY, K1
+    # 1 row done, check if we're done with the buffer
     sub  pixelcount, pixelsize
     bgtz pixelcount, row_loop
-end_pixel_loop:
+end_buffer_loop:
 
     # Now DMA back into RDRAM
     lw s0, %lo(DST_SRC_RDRAM)
