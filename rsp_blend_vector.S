@@ -156,21 +156,18 @@ BlendCmd_NormalMapSetSources:
     #define vresult    $v10
     #define values     $v11
     #define kpixelsize $v11.e0
-    #define ksize       $v11.e1
-    #define ksize2      $v11.e5
-    #define kshiftx     $v11.e2
-    #define kshifty     $v11.e3
-    #define kstrength   $v11.e4
+    #define ksize      $v11.e1
+    #define ksize2     $v11.e5
+    #define kshiftx    $v11.e2
+    #define kshifty    $v11.e3
+    #define kstrength  $v11.e4
     #define vcalcindex   $v12
-    #define vcalcoffset   $v13
-    #define vcalcaddress   $v14
-    #define X_val2      $v15
-    #define Y_val2      $v16
-    #define X_val3      $v17
-    #define Y_val3      $v18
-    #define Y_val4      $v19
-    #define Y_val5      $v20
-    #define vindexY     $v21
+    #define vcalcoffset  $v13
+    #define vcalcaddress $v14
+    #define X_val2     $v15
+    #define Y_val2     $v16
+    #define Y_val3     $v17
+    #define vindexY    $v18
 
 BlendCmd_NormalMapReflect:
 
@@ -197,6 +194,7 @@ BlendCmd_NormalMapReflect:
 
     li t0, %lo(ENV_BUF)
     mtc2 t0, vaddress.e0
+    vor vaddress, vzero, vaddress.e0
 
     li t0, 1<<16>>7
     srav strength, t0, strength
@@ -215,6 +213,8 @@ BlendCmd_NormalMapReflect:
     mtc2 shifty, kshifty
     vand vindexY, vindexY, vzero
     add pixelsize, 1
+    vadd  vindex,  vindex, kshiftx
+    vadd  vindexY, vindexY,kshifty
 
 buffer_loop:
     # Fetch normalmap buffer into DMEM. This is a sync version that will
@@ -241,17 +241,15 @@ pixel_loop:
     vmudm n_shiftX, kstrength   #      int n_shiftX = (normalmap->x - 128) >> strength;
     vmudm n_shiftY, kstrength   #      int n_shiftY = (normalmap->y - 128) >> strength;
 
-    vadd  X_val,  vindex, kshiftx
-    vadd  Y_val2, vindexY,kshifty
-    vadd  X_val2, X_val,  n_shiftX
-    vsub  Y_val3, Y_val2, n_shiftY   #      this line is either add or sub depends on whether you use DirectX/OpenGL normal maps respectively
-    vand  X_val3, X_val2, kpixelsize       #      int x = (index_x + shiftx + n_shiftX) % pixelsize;
-    vand  Y_val4, Y_val3  kpixelsize
-    vmudn Y_val5, Y_val4, ksize2   #      int y = ((index_y + shifty - n_shiftY) % pixelsize) << size;
+    vadd  X_val, vindex,  n_shiftX
+    vsub  Y_val, vindexY, n_shiftY   #      this line is either add or sub depends on whether you use DirectX/OpenGL normal maps respectively
+    vand  X_val2, X_val, kpixelsize       #      int x = (index_x + shiftx + n_shiftX) % pixelsize;
+    vand  Y_val2, Y_val  kpixelsize
+    vmudn Y_val3, Y_val2, ksize2   #      int y = ((index_y + shifty - n_shiftY) % pixelsize) << size;
 
-    vadd vcalcindex, X_val3, Y_val5 # x+y
-    vsll vcalcoffset, vcalcindex, 1 # (x+y)*2
-    vadd vcalcaddress, vcalcoffset, vaddress.e0 # pre-add the address to all values
+    vmudn vcalcoffset, X_val2, K2 # use MAC to calculate the address into envmap after normal mapping
+    vmadn vcalcoffset, Y_val3, K2 # (x+y)*2
+    vmadn vcalcaddress, vaddress, K1 # pre-add the address to all values
 
     mfc2 t4, vcalcaddress.e0
     mfc2 t5, vcalcaddress.e1
