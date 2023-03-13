@@ -143,6 +143,7 @@ BlendCmd_NormalMapSetSources:
 
     #define pixelcount t0
     #define nrm_buf    t1
+    #define rowcount   s5
 
     #define n_shiftX   $v01
     #define n_shiftY   $v02
@@ -160,6 +161,16 @@ BlendCmd_NormalMapSetSources:
     #define kshiftx     $v11.e2
     #define kshifty     $v11.e3
     #define kstrength   $v11.e4
+    #define vcalcindex   $v12
+    #define vcalcoffset   $v13
+    #define vcalcaddress   $v14
+    #define X_val2      $v15
+    #define Y_val2      $v16
+    #define X_val3      $v17
+    #define Y_val3      $v18
+    #define Y_val4      $v19
+    #define Y_val5      $v20
+    #define vindexY     $v21
 
 BlendCmd_NormalMapReflect:
 
@@ -202,6 +213,8 @@ BlendCmd_NormalMapReflect:
     mtc2 pixelsize, kpixelsize
     mtc2 shiftx, kshiftx
     mtc2 shifty, kshifty
+    vand vindexY, vindexY, vzero
+    add pixelsize, 1
 
 buffer_loop:
     # Fetch normalmap buffer into DMEM. This is a sync version that will
@@ -219,6 +232,8 @@ buffer_loop:
     la nrm_buf, %lo(NRM_BUF)
     la dest_buf, %lo(DST_BUF)
 
+row_loop:
+    move rowcount, pixelsize
 pixel_loop:
 
     lpv   n_shiftX, 0,nrm_buf  #       int n_shiftX = normalmap->x; 
@@ -226,28 +241,26 @@ pixel_loop:
     vmudm n_shiftX, kstrength   #      int n_shiftX = (normalmap->x - 128) >> strength;
     vmudm n_shiftY, kstrength   #      int n_shiftY = (normalmap->y - 128) >> strength;
 
-    vadd  X_val, vindex, kshiftx
-    vadd  X_val, n_shiftX
-    vand  X_val, kpixelsize       #      int x = (index + shiftx + n_shiftX) % pixelsize;
+    vadd  X_val,  vindex, kshiftx
+    vadd  Y_val2, vindexY,kshifty
+    vadd  X_val2, X_val,  n_shiftX
+    vsub  Y_val3, Y_val2, n_shiftY   #      this line is either add or sub depends on whether you use DirectX/OpenGL normal maps respectively
+    vand  X_val3, X_val2, kpixelsize       #      int x = (index_x + shiftx + n_shiftX) % pixelsize;
+    vand  Y_val4, Y_val3  kpixelsize
+    vmudn Y_val5, Y_val4, ksize2   #      int y = ((index_y + shifty - n_shiftY) % pixelsize) << size;
 
-    vmudl Y_val, vindex, ksize
-    vadd  Y_val, kshifty   #      this line is either sub or add depends on whether you use DirectX/OpenGL normal maps respectively
-    vsub  Y_val, n_shiftY
-    vand  Y_val, kpixelsize
-    vmudn Y_val, Y_val, ksize2   #      int y = (((index >> size) + shifty - n_shiftY) % pixelsize) << size;
+    vadd vcalcindex, X_val3, Y_val5 # x+y
+    vsll vcalcoffset, vcalcindex, 1 # (x+y)*2
+    vadd vcalcaddress, vcalcoffset, vaddress.e0 # pre-add the address to all values
 
-    vadd n_shiftX, X_val, Y_val # x+y
-    vsll n_shiftX, n_shiftX, 1 # (x+y)*2
-    vadd n_shiftX, vaddress.e0 # pre-add the address to all values
-
-    mfc2 t4, n_shiftX.e0
-    mfc2 t5, n_shiftX.e1
-    mfc2 t6, n_shiftX.e2
-    mfc2 t7, n_shiftX.e3
-    mfc2 t8, n_shiftX.e4
-    mfc2 t9, n_shiftX.e5
-    mfc2 s6, n_shiftX.e6
-    mfc2 s7, n_shiftX.e7
+    mfc2 t4, vcalcaddress.e0
+    mfc2 t5, vcalcaddress.e1
+    mfc2 t6, vcalcaddress.e2
+    mfc2 t7, vcalcaddress.e3
+    mfc2 t8, vcalcaddress.e4
+    mfc2 t9, vcalcaddress.e5
+    mfc2 s6, vcalcaddress.e6
+    mfc2 s7, vcalcaddress.e7
 
     lsv vresult.e0, 0,t4 # *destmap = envmap[x + y];
     lsv vresult.e1, 0,t5 # *destmap = envmap[x + y];
@@ -260,15 +273,20 @@ pixel_loop:
 
     sqv vresult, 0, dest_buf
 
+
+end_row_loop:
     addi nrm_buf,  NORM16_BYTES*PX_PER_VECTOR
     addi dest_buf, RGBA16_BYTES*PX_PER_VECTOR # normalmap++, destmap++
     vadd vindex, K8
-
-end_pixel_loop:
     # 8 pixels done, check if we're done
-    addi pixelcount, -PX_PER_VECTOR
-    bgtz pixelcount, pixel_loop
-    
+    addi rowcount, -PX_PER_VECTOR
+    bgtz rowcount, pixel_loop
+    nop 
+    vadd vindexY, K1
+    sub  pixelcount, pixelsize
+    bgtz pixelcount, row_loop
+end_pixel_loop:
+
     # Now DMA back into RDRAM
     lw s0, %lo(DST_SRC_RDRAM)
     li s4, %lo(DST_BUF)
